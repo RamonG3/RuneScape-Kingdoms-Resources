@@ -6,7 +6,7 @@ here changes game rules, data or UI. All of it is about download size, sync
 traffic and caching. Fold the relevant parts into `PROJECT_HANDOFF.md` as each
 deploy ships (the suggested edits are at the end), then delete this note.
 
-**Revision 2.** This version takes in your four review points:
+**Revision 2** (still current for the plan; the status section above is revision 3) — it takes in your four review points:
 - Two deploys instead of one.
 - Board audio added tolerantly.
 - The baseline correction.
@@ -15,6 +15,71 @@ deploy ships (the suggested edits are at the end), then delete this note.
 It also adds one new finding: **the board worker deletes the TTRPG's cache**
 (§1). The handoff corrections from revision 1 are already in your updated
 `PROJECT_HANDOFF.md`, so they are dropped from this note.
+
+---
+
+## Status — v105 built, not deployed (revision 3)
+
+`patch_v105.py` has been applied to both v104 zips, producing
+`rsk-site-v105-PUBLIC.zip` and `rsk-site-v105-PRIVATE.zip`.
+
+- Public and private still differ only by `ttrpg/img/`.
+- A second run of the script is refused.
+- The script and `tests/t_v105.js` are on the repo branch. The **built sites
+  are not**, because the GitHub repo is public.
+
+| Check | Result |
+|---|---|
+| `tests/t_v105.js` (Playwright Chromium, real workers) | **54/54** public (run twice), **54/54** private |
+| `t_necromancy.js`, v105 against v104 | 146/146, same as v104 |
+| `t_homebrewrules.js`, v105 against v104 | 137/139, with **the same two** wrong-baseline failures as v104 against v104 (no v102 build in this session) |
+
+What `t_v105.js` proves:
+- All 16 clips are byte-identical to v104's inline data.
+- The rest of the board page is byte-identical.
+- The TTRPG page differs by the pin line only.
+- `ASSETS` is still 33 entries, every one of which exists.
+- The TTRPG cache survives the board worker activating, **and the same
+  scenario on v104 wipes it (control)**. Old `rsk-sheet-v8.17` is still
+  cleaned up, and a foreign `rsk-audio-v1` is left alone.
+- All 16 sounds play through `RSK_BOARD.playSound`, online and offline.
+- With `melee.mp3` missing, the worker still installs, and the clip caches
+  on its first play and then plays offline. Control: the same missing file
+  inside the atomic list leaves no worker.
+- The page requests exactly `@2.116.0`, the real 2.116.0 build loads, and the
+  page errors and UI match v104 given the same library.
+
+**The Supabase pin is 2.116.0, not "whatever @2 serves".** npm shows 2.117.0
+was published on 2026-09-22 at 12:57 UTC, the same day as this build. 2.116.0
+(2026-09-07) is what `@2` served for the two weeks before, so it is what the
+table has actually run.
+
+**Still open before the board half ships:**
+- `which-build.py`, `t_board.js`, `t_boardsw.js` and `t_boardicons.js` have not
+  been run: none were provided to this session. `board/audio/` is a new folder
+  in both builds; see whether `which-build.py` needs it whitelisted.
+- Board sounds need a check on an iPhone, online and in airplane mode. Only
+  Chromium was tested.
+- Pre-v8 cache names: keeping the strict `rsk-sheet-` prefix, as you advised.
+  Add any remembered older name to the delete list explicitly.
+
+**Deploy gate for v106 (your scheduling point):** let v105 sit for a session or
+two. Confirm the board is on `rsk-sheet-v8.18` on the devices that matter:
+DevTools → Application → Cache storage shows `rsk-sheet-v8.18`; on a phone,
+open the board once online and reload it. **Only then ship v106.** Until every
+device has switched, an old board worker keeps deleting every cache but its
+own, including v106's `rsk-audio-v1`, and the audio fix will look broken.
+
+**Test-writing traps found along the way**, worth adding to §5 of your
+handoff:
+- The board page registers its worker only on `https:` or a hostname of
+  exactly `localhost`. On `127.0.0.1` no worker ever installs, and every
+  worker test quietly passes or fails for the wrong reason.
+- Playwright's `context.route` does not see requests made **by a service
+  worker**, so a test that stubs a CDN must block workers or serve the stub
+  some other way.
+- The TTRPG page reloads itself on its first `controllerchange`, so any probe
+  running on that page must tolerate a navigation mid-evaluate.
 
 ---
 
